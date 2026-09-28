@@ -1,0 +1,960 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Help Start Education Foundation - Document Editor</title>
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.1/fabric.min.js"></script>
+    <script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
+    
+    <style>
+:root {
+            --primary: #0f172a; 
+            --secondary: #3182ce; 
+            --danger: #e53e3e;
+            --draft-save: #4c51bf; 
+            --draft-load: #319795;
+            --dark: #121212; 
+            --light: #18181b; 
+            --border: #3f3f46; 
+            --surface: #27272a;
+            --text-main: #f4f4f5;
+            --text-muted: #a1a1aa;
+        }
+
+        body { font-family: 'Inter', sans-serif; background-color: var(--dark); color: var(--text-main); margin: 0; padding: 0; display: flex; flex-direction: column; height: 100vh; }
+        
+        header { background-color: var(--primary); color: white; padding: 15px; text-align: center; z-index: 10; border-bottom: 1px solid var(--border); }
+        
+        #loginScreen {
+            position: absolute; top: 30%; left: 50%; transform: translate(-50%, -50%); width: 100%; max-width: 400px; padding: 30px; background-color: var(--surface); border-radius: 10px; box-shadow: 0px 8px 30px rgba(0,0,0,0.5); border: 1px solid var(--border); font-family: Arial, sans-serif; box-sizing: border-box; z-index: 1000; text-align: center; color: var(--text-main);
+        }
+
+        #mainWorkspace { display: none; flex: 1; flex-direction: row; overflow: hidden; }
+        
+        .sidebar { width: 260px; background-color: var(--surface); padding: 20px; border-right: 1px solid var(--border); overflow-y: auto; display: flex; flex-direction: column; gap: 15px; }
+        
+        .workspace { flex: 1; display: flex; justify-content: center; padding: 40px; background-color: var(--dark); overflow-y: auto; overflow-x: hidden; }
+        
+        .tool-group { padding-bottom: 12px; border-bottom: 1px solid var(--border); }
+        label { font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; display: block; margin-bottom: 5px; }
+        
+        /* Dark mode inputs */
+        input[type="text"], input[type="password"], input[type="number"], select, .search-box { 
+            width: 100%; padding: 8px; margin-top: 5px; box-sizing: border-box; 
+            background-color: var(--light); color: var(--text-main); border: 1px solid var(--border); border-radius: 4px;
+        }
+        input[type="file"] { width: 100%; margin-top: 5px; color: var(--text-muted); }
+        input::placeholder { color: #71717a; }
+        
+        .row { display: flex; gap: 10px; margin-top: 5px; }
+        input[type="color"] { width: 45px; height: 40px; cursor: pointer; border: 1px solid var(--border); border-radius: 4px; background: none; }
+        
+        .btn { background-color: var(--secondary); color: white; border: none; padding: 12px; border-radius: 6px; cursor: pointer; font-weight: 600; width: 100%; margin-top: 5px; box-sizing: border-box; transition: all 0.2s ease-in-out; }
+        .btn:hover { filter: brightness(1.1); transform: translateY(-1px); }
+        .btn:active { transform: translateY(1px); }
+        .btn-danger { background-color: var(--danger); }
+        .btn-success { background-color: #16a34a; }
+        .btn-draft-save { background-color: var(--draft-save); }
+        
+        .canvas-wrapper { background: var(--light); box-shadow: 0 8px 25px rgba(0,0,0,0.6); margin: 0 auto; border: 1px solid var(--border); }
+        #pdfRenderCanvas { display: none; }
+        
+        .user-badge { background: var(--border); padding: 8px; border-radius: 4px; font-size: 13px; font-weight: bold; text-align: center; color: var(--text-main); }
+
+        .draft-item { 
+            background: var(--light); 
+            padding: 12px; 
+            border-radius: 8px; 
+            margin-top: 10px; 
+            display: flex; 
+            flex-direction: column; 
+            gap: 8px; 
+            border: 1px solid var(--border); 
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3); 
+            transition: transform 0.2s ease, box-shadow 0.2s ease; 
+        }
+        .draft-item:hover {
+            transform: translateY(-3px); 
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5);
+        }
+        
+        .draft-title-container { font-size: 13px; font-weight: bold; color: #60a5fa; margin-bottom: 2px; text-transform: capitalize; }
+        .draft-actions { display: flex; gap: 4px; }
+        .btn-sm { padding: 6px 4px; font-size: 10px; border-radius: 4px; border: none; cursor: pointer; font-weight: bold; flex: 1; text-align: center; color: white; transition: background 0.2s; }
+        .btn-sm:hover { filter: brightness(1.15); }
+        .btn-title { background-color: #4b5563; }
+        .btn-edit { background-color: #0d9488; }
+        .btn-del { background-color: #dc2626; }
+        
+        /* DRAG AND DROP ZONE STYLES */
+        .drop-zone {
+            border: 2px dashed var(--border);
+            border-radius: 8px;
+            padding: 20px 10px;
+            text-align: center;
+            background-color: var(--light);
+            color: var(--text-muted);
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-size: 12px;
+            margin-top: 5px;
+            margin-bottom: 15px;
+        }
+        .drop-zone.dragover {
+            background-color: #1e3a8a;
+            border-color: #3b82f6;
+            color: #93c5fd;
+            transform: scale(1.02);
+        }
+        .drop-zone:hover {
+            background-color: #27272a;
+        }
+
+        .spinner-infinity {
+            width: 40px;
+            height: 40px;
+            border: 4px solid var(--border); 
+            border-top: 4px solid #60a5fa; 
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+
+<div id="loginScreen">
+    <div id="errorMsg" style="display: none; color: red; margin-bottom: 15px; font-weight: bold;">Invalid credentials. Subukan ulit.</div>
+    <div style="text-align: left; margin-bottom: 15px;">
+        <label>Username:</label>
+        <input type="text" id="usernameInput" placeholder="Username" style="width: 100%; padding: 12px; border: 2px solid #cccccc; border-radius: 5px; box-sizing: border-box;">
+    </div>
+    <div style="text-align: left; margin-bottom: 20px;">
+        <label>Password:</label>
+        <input type="password" id="passwordInput" placeholder="Password" style="width: 100%; padding: 12px; border: 2px solid #cccccc; border-radius: 5px; box-sizing: border-box;">
+    </div>
+    <button class="btn btn-success" onclick="attemptLogin()" style="width: 60%; max-width: 200px; display: block; margin: 0 auto;">Log In</button>
+    
+    <details style="margin-top: 15px; text-align: left; background-color: #f8f9fa; padding: 10px; border-radius: 5px; border: 1px solid #eee;">
+        <summary style="cursor: pointer; font-weight: bold; color: #0d6efd; font-size: 0.85rem;">Need to change your password?</summary>
+        <div style="margin-top: 15px;">
+            <input type="text" id="oldUser" placeholder="Current Username" style="width: 100%; margin-bottom: 10px; padding: 8px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box;">
+            <input type="password" id="oldPass" placeholder="Current Password" style="width: 100%; margin-bottom: 10px; padding: 8px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box;">
+            <hr style="border: 0; border-top: 1px solid #eee; margin: 15px 0;">
+            <input type="text" id="newUser" placeholder="New Username" style="width: 100%; margin-bottom: 10px; padding: 8px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box;">
+            <input type="password" id="newPass" placeholder="New Password" style="width: 100%; margin-bottom: 10px; padding: 8px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box;">
+            <button onclick="updateAccount()" style="width: 100%; padding: 10px; background-color: #0056b3; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold;">Save Changes</button>
+        </div>
+    </details>
+</div>
+
+<div id="loadingOverlay" style="display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); padding: 25px 40px; background: #ffffff; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15); border-radius: 12px; border: 1px solid #e2e8f0; z-index: 9999; flex-direction: column; align-items: center; justify-content: center; font-family: 'Inter', sans-serif;">
+    
+    <div class="spinner-infinity"></div>
+    
+    <p id="loadingText" style="margin-top: 15px; margin-bottom: 0; font-weight: bold; font-size: 15px; color: #1a365d; white-space: nowrap;">
+        Saving draft... Just a moment. ⏳
+    </p>
+</div>
+
+<header><div style="display: flex; align-items: center; justify-content: center; gap: 15px;">
+        
+<!-- HSEF SVG Logo Code -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 500" width="50" height="50">
+  <defs>
+    <!-- Mask defining the transparent gaps -->
+    <mask id="logo-gaps">
+      <!-- Base mask fill -->
+      <rect width="500" height="500" fill="#FFFFFF" />
+      
+      <!-- Middle horizontal transparent gap -->
+      <rect x="0" y="241" width="500" height="20" fill="#000000" />
+      
+      <!-- Top concentric arch gaps -->
+      <path d="M 96 241 A 155 155 0 0 1 405 241" fill="none" stroke="#000000" stroke-width="25" />
+      <path d="M 166 241 A 90 85 0 0 1 345 241" fill="none" stroke="#000000" stroke-width="25" />
+      
+      <!-- Bottom vertical column gaps -->
+      <rect x="90" y="259" width="20" height="241" fill="#000000" stroke-width="25"/>
+      <rect x="155" y="259" width="20" height="241" fill="#000000" stroke-width="25"/>
+      <rect x="335" y="259" width="20" height="241" fill="#000000" stroke-width="25"/>
+      <rect x="395" y="259" width="20" height="241" fill="#000000" stroke-width="25"/>
+      <rect x="245" y="259" width="20" height="241" fill="#000000" stroke-width="25"/>
+    
+    </mask>
+  </defs>
+
+  <!-- Solid white logo circle cut by the mask -->
+  <circle cx="250" cy="250" r="200" fill="#FFFFFF" mask="url(#logo-gaps)" />
+</svg>
+        <h1 style="margin: 0;">Help Start Education Foundation</h1>
+        
+    </div>
+</header>
+
+<div id="mainWorkspace">
+    <aside class="sidebar">
+        <div class="user-badge" id="displayUser">Logged In as : --</div>
+        <div style="padding: 10px; text-align: center; background-color: #2b2c2c; border-radius: 5px;">
+            <small style="display: block; color: #f3f4f5; font-weight: bold; margin-bottom: 5px;">
+                Logged In As: <span id="userBadge" style="color: #f1f0f0;">--</span>
+            </small>
+            <button onclick="logoutApp()" style="width: 100%; padding: 5px 10px; background-color: #dc3545; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 0.85rem; font-weight: bold;">Log Out</button>
+        </div>
+        
+        <div class="tool-group">
+            <label>1. OPEN FILE</label>
+            <div id="dropZone" class="drop-zone">
+                <span id="dropZoneText">Drag and Click the file</span>
+                <input type="file" id="fileUpload" accept="application/pdf, image/*" style="display: none;">
+            </div>
+        </div>
+        
+        <div class="tool-group">
+            <button class="btn" onclick="addText()">+ Add Text</button>
+            <button class="btn" style="background-color: #d69e2e;" onclick="saveToServer()">📁 Download to Storage</button>
+            <label style="margin-top: 15px;">(Undo / Redo)</label>
+            <div class="row" style="margin-bottom: 5px;">
+                <button id="undoBtn" class="btn btn-sm" style="background-color: #718096; font-size: 12px; padding: 8px;">↩️ Undo</button>
+                <button id="redoBtn" class="btn btn-sm" style="background-color: #718096; font-size: 12px; padding: 8px;">↪️ Redo</button>
+            </div>
+        </div>
+        
+        <div class="tool-group">
+            <label>Text Styles</label>
+            <div class="row">
+                <input type="color" id="textColor" value="#000000" onchange="updateText()" />
+                <input type="number" id="textSize" value="32" onchange="updateText()" />
+            </div>
+            <button class="btn btn-danger" onclick="deleteText()">Delete Text</button>
+        </div>
+        
+        <div class="tool-group" style="display: flex; flex-direction: column; flex: 1; min-height: 240px;">
+            <label>📝 Saved Drafts</label>
+            <input type="text" id="draftSearch" class="search-box" placeholder="🔍 Search Title" onkeyup="filterDrafts()">
+            <button class="btn btn-draft-save" id="draftSaveBtn" onclick="saveDraftToServer()">💾 Save Current Draft</button>
+            <div id="draftsList" style="font-size: 12px; margin-top: 10px; overflow-y: auto; background: #2c2c2c; padding: 8px; border-radius: 4px; border: 1px solid var(--border); flex: 1; max-height: 220px;">
+                Walang nakasave na draft.
+            </div>
+        </div>
+        <!-- Draft Count Indicator -->
+<div style="font-weight: bold; margin-bottom: 8px; color: #a0aec0;">
+    Total Pages/Drafts: <span id="totalDraftsCount" style="color: #63b3ed;">0</span>
+</div>
+
+<!-- Existing Drafts Container -->
+<div id="draftsList"></div>
+        
+        <div class="tool-group">
+            <label>Export File</label>
+            <select id="exportFormat">
+                <option value="pdf">PDF Document</option>
+                <option value="png">PNG Image</option>
+            </select>
+            <button class="btn btn-success" onclick="exportDoc()">⬇ Download</button>
+        </div>
+
+        <div class="tool-group">
+            <label>Recent Activity / History</label>
+            <div id="historyList" style="font-size: 12px; margin-top: 10px; max-height: 140px; overflow-y: auto; background: #222222; padding: 8px; border-radius: 4px; border: 1px solid var(--border);">
+                History
+            </div>
+        </div>
+    </aside>
+
+    <main class="workspace">
+        <div class="canvas-wrapper"><canvas id="editorCanvas"></canvas></div>
+    </main>
+</div>
+<canvas id="pdfRenderCanvas"></canvas>
+
+<script>
+// ✅ ADD THIS: To properly log the user out and clear the session
+    window.logoutApp = function() {
+    // Remove the saved session from the browser
+    localStorage.removeItem('hsef_logged_in_user');
+    currentUser = null;
+    
+    // Switch the UI back to the login screen
+    document.getElementById('mainWorkspace').style.display = 'none';
+    document.getElementById('loginScreen').style.display = 'block';
+    
+    // Clear the input fields and error messages
+    document.getElementById('usernameInput').value = '';
+    document.getElementById('passwordInput').value = '';
+    document.getElementById('errorMsg').style.display = 'none';
+    
+    // Clear the canvas workspace (optional but recommended)
+    if (typeof clearWorkspace === 'function') clearWorkspace();
+};
+
+    // ✅ ADD THIS: Restore the session automatically on page reload
+    window.onload = function() {
+    const savedUser = localStorage.getItem('hsef_logged_in_user');
+    
+    if (savedUser) {
+        currentUser = savedUser;
+        const displayName = getDisplayName(currentUser);
+        
+        // Hide the login screen and show the workspace immediately
+        document.getElementById('loginScreen').style.display = 'none';
+        document.getElementById('mainWorkspace').style.display = 'flex';
+        
+        document.getElementById('displayUser').innerText = `Logged In As: ${displayName}`;
+        document.getElementById('userBadge').innerText = displayName;
+        
+        if (typeof fetchHistory === 'function') fetchHistory(); 
+        fetchDrafts();
+    }
+};
+    
+    // --- MGA VARIABLES PARA SA UNDO/REDO ---
+    let canvasHistory = [];
+    let historyIndex = -1;
+    let isHistoryNavigating = false; 
+
+    // Kunin ang mga element para sa Drag and Drop
+    const dropZone = document.getElementById('dropZone');
+    const fileInput = document.getElementById('fileUpload');
+    const dropZoneText = document.getElementById('dropZoneText');
+
+    dropZone.addEventListener('click', () => fileInput.click());
+
+    dropZone.addEventListener('dragover', (e) => {
+        e.preventDefault(); 
+        dropZone.classList.add('dragover');
+    });
+
+    dropZone.addEventListener('dragleave', () => {
+        dropZone.classList.remove('dragover');
+    });
+
+    dropZone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        dropZone.classList.remove('dragover');
+        if (e.dataTransfer.files.length > 0) {
+            fileInput.files = e.dataTransfer.files;
+            fileInput.dispatchEvent(new Event('change'));
+        }
+    });
+
+    fileInput.addEventListener('change', (e) => {
+        if(e.target.files.length > 0) {
+            dropZoneText.innerHTML = `Selected:<br><b style="color:#1a365d;">${e.target.files[0].name}</b>`;
+        } else {
+            dropZoneText.innerHTML = `I-drag ang PDF o Imahe rito<br>o i-click para pumili`;
+        }
+    });
+
+    let currentUser = null;
+    let currentActiveDraftId = null; 
+    let allDraftsCache = [];
+
+    const professionalNames = {
+        'Jbitancs': 'Jomari',
+        'Analyn': 'Analyn',
+        'Denmike': 'Denmike',
+        'Iyah': 'Iyah',
+        'Anna': 'Anna'
+    };
+
+    function getDisplayName(username) {
+        return professionalNames[username] || username;
+    }
+
+    async function attemptLogin() {
+        const user = document.getElementById('usernameInput').value;
+        const pass = document.getElementById('passwordInput').value;
+        
+        try {
+            const response = await fetch('/api/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username: user, password: pass })
+            });
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                currentUser = user;
+                // ✅ ADD THIS: Save the user session in the browser's local storage
+                localStorage.setItem('hsef_logged_in_user', user); 
+                const displayName = getDisplayName(currentUser); 
+                
+                document.getElementById('loginScreen').style.display = 'none';
+                document.getElementById('mainWorkspace').style.display = 'flex';
+                
+                document.getElementById('displayUser').innerText = `Logged In: ${displayName}`;
+                document.getElementById('userBadge').innerText = displayName;
+                
+                if (typeof fetchHistory === 'function') fetchHistory(); 
+                fetchDrafts(); 
+            } else {
+                document.getElementById('errorMsg').style.display = 'block';
+            }
+        } catch (err) {
+            alert("Cannot connect to the server. Please ensure it is running.");
+            console.error(err);
+        }
+    }
+    
+    window.attemptLogin = attemptLogin;
+
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
+    const canvas = new fabric.Canvas('editorCanvas', { width: 800, height: 600 });
+    let originalPdfBytes = null;
+    let currentBackgroundBase64 = null; 
+
+    document.getElementById('fileUpload').addEventListener('change', async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        canvas.clear();
+        currentActiveDraftId = null; 
+        
+        if (file.type === 'application/pdf') {
+            originalPdfBytes = new Uint8Array(await file.arrayBuffer());
+            const pdf = await pdfjsLib.getDocument({ data: originalPdfBytes }).promise;
+            const page = await pdf.getPage(1);
+            const viewport = page.getViewport({ scale: 1.5 });
+            const renderCanvas = document.getElementById('pdfRenderCanvas');
+            renderCanvas.width = viewport.width; renderCanvas.height = viewport.height;
+            await page.render({ canvasContext: renderCanvas.getContext('2d'), viewport }).promise;
+            
+            currentBackgroundBase64 = renderCanvas.toDataURL('image/png');
+            loadBackgroundFromDataUrl(currentBackgroundBase64);
+        } else if (file.type.startsWith('image/')) {
+            const reader = new FileReader();
+            reader.onload = function(f) {
+                currentBackgroundBase64 = f.target.result;
+                loadBackgroundFromDataUrl(currentBackgroundBase64);
+            }
+            reader.readAsDataURL(file);
+        }
+    });
+
+    function loadBackgroundFromDataUrl(dataUrl) {
+        fabric.Image.fromURL(dataUrl, img => {
+            const targetWidth = 800;
+            const scaleFactor = targetWidth / (img.width || 1);
+
+            canvas.setWidth(targetWidth);
+            canvas.setHeight(img.height * scaleFactor);
+
+            img.set({
+                scaleX: scaleFactor,
+                scaleY: scaleFactor
+            });
+
+            canvas.setBackgroundImage(img, () => {
+                canvas.renderAll();
+                canvasHistory = [];
+                historyIndex = -1;
+                saveHistory();
+            });
+        });
+    }
+
+    function addText() { 
+        const textObj = new fabric.IText('add text', { left: 100, top: 100, fontSize: 32, fill: '#000000' });
+        canvas.add(textObj); 
+        canvas.setActiveObject(textObj);
+        canvas.renderAll();
+    }
+    
+    function updateText() {
+        const obj = canvas.getActiveObject();
+        if (obj && obj.type === 'i-text') { 
+            obj.set({ fill: document.getElementById('textColor').value, fontSize: parseInt(document.getElementById('textSize').value, 10) }); 
+            canvas.renderAll(); 
+        }
+    }
+    function deleteText() { const obj = canvas.getActiveObject(); if (obj) { canvas.remove(obj); canvas.renderAll(); } }
+
+    /* =========================================
+       UNDO / REDO SYSTEM FUNCTIONS
+       ========================================= */
+    function saveHistory() {
+        if (isHistoryNavigating) return; 
+        if (historyIndex < canvasHistory.length - 1) {
+            canvasHistory = canvasHistory.slice(0, historyIndex + 1);
+        }
+        canvasHistory.push(JSON.stringify(canvas));
+        historyIndex++;
+    }
+
+    function undo() {
+        if (historyIndex > 0) {
+            isHistoryNavigating = true;
+            historyIndex--;
+            canvas.loadFromJSON(canvasHistory[historyIndex], function() {
+                canvas.renderAll();
+                isHistoryNavigating = false;
+            });
+        }
+    }
+
+    function redo() {
+        if (historyIndex < canvasHistory.length - 1) {
+            isHistoryNavigating = true;
+            historyIndex++;
+            canvas.loadFromJSON(canvasHistory[historyIndex], function() {
+                canvas.renderAll();
+                isHistoryNavigating = false;
+            });
+        }
+    }
+
+    document.getElementById('undoBtn').addEventListener('click', undo);
+    document.getElementById('redoBtn').addEventListener('click', redo);
+
+    document.addEventListener('keydown', function(e) {
+        if (e.ctrlKey && e.key === 'z') {
+            e.preventDefault();
+            undo();
+        } else if (e.ctrlKey && e.key === 'y') {
+            e.preventDefault();
+            redo();
+        }
+    });
+
+    canvas.on('object:added', saveHistory);
+    canvas.on('object:modified', saveHistory);
+    canvas.on('object:removed', saveHistory);
+
+    function showLoading(message) {
+        document.getElementById('loadingText').innerText = message;
+        document.getElementById('loadingOverlay').style.display = 'flex';
+    }
+
+    function hideLoading() {
+        document.getElementById('loadingOverlay').style.display = 'none';
+    }
+
+    function clearWorkspace() {
+        canvas.clear();                      
+        currentActiveDraftId = null;          
+        currentBackgroundBase64 = null;       
+        originalPdfBytes = null;              
+        document.getElementById('fileUpload').value = ''; 
+        document.getElementById('dropZoneText').innerHTML = `drag or select the file to upload`;
+        
+        canvasHistory = [];
+        historyIndex = -1;
+        saveHistory(); 
+    }
+
+    async function saveDraftToServer() {
+        if (!currentBackgroundBase64 && !canvas.backgroundImage) {
+            alert("Mag-upload muna ng dokumento o litrato bago i-save ang draft!");
+            return;
+        }
+
+        let draftTitle = "Untitled Folder Draft";
+        if (!currentActiveDraftId) {
+            const userTitleInput = prompt("Maglagay ng maikling Pamagat o Pangalan para sa Folder na ito:", "Contract Draft");
+            if (userTitleInput === null) return; 
+            if (userTitleInput.trim() !== "") {
+                draftTitle = userTitleInput.trim();
+            }
+        }
+
+        showLoading("Saving draft folder... Please wait. ⏳");
+
+        const layers = canvas.getObjects().filter(o => o.type === 'i-text').map(o => {
+            return {
+                text: o.text, left: o.left, top: o.top, fontSize: o.fontSize, fill: o.fill, scaleX: o.scaleX, scaleY: o.scaleY
+            };
+        });
+
+        try {
+            const response = await fetch('/api/drafts/save', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    draftId: currentActiveDraftId, 
+                    user: currentUser,
+                    title: draftTitle,
+                    backgroundImage: currentBackgroundBase64, 
+                    canvasWidth: canvas.width,
+                    canvasHeight: canvas.height,
+                    textLayers: layers
+                })
+            });
+            const data = await response.json();
+            
+        if (data.success) {
+              alert("✅ Draft folder saved successfully!");
+            fetchDrafts();
+            clearWorkspace(); 
+            } else {
+            alert("❌ Error saving: " + data.message);
+            }
+            } catch (err) {
+            alert("Error connecting to the server for the draft system.");
+            } finally {
+             hideLoading(); 
+            }
+        }
+
+
+    async function fetchDrafts() {
+        try {
+            const response = await fetch(`/api/drafts/all`);
+            const drafts = await response.json();
+            // Add these 2 lines inside your current fetchDrafts() function:
+const countElement = document.getElementById('totalDraftsCount');
+if (countElement) countElement.innerText = drafts.length;
+            allDraftsCache = drafts; 
+            renderDraftsView(allDraftsCache);
+        } catch (err) {
+            document.getElementById('draftsList').innerHTML = '<span style="color: red;">Failed to load drafts.</span>';
+        }
+        
+    }
+
+    function renderDraftsView(draftsData) {
+        const container = document.getElementById('draftsList');
+        container.innerHTML = ''; 
+        
+        if (draftsData.length === 0) {
+            container.innerHTML = '<span style="color: #6c757d; display:block; text-align:center; padding:10px;">Walang nahanap na drafts.</span>';
+            return;
+        }
+
+        draftsData.forEach((draft) => {
+            const date = new Date(draft.savedAt).toLocaleString('en-PH', { timeZone: 'Asia/Manila' });
+            const item = document.createElement('div');
+            item.className = 'draft-item';
+            
+            item.innerHTML = `
+                <div>
+                    <div class="draft-title-container">📁 <span>${draft.title || 'Untitled Draft'}</span></div>
+                    <strong style="color: #2b6cb0; font-size:11px;">By: ${getDisplayName(draft.user)}</strong>
+                    <small style="color: #718096; display:block; font-size:9px;">Saved: ${date}</small>
+                </div>
+                <div class="draft-actions">
+                    <button class="btn-sm btn-title" onclick="editDraftTitle('${draft._id}', '${draft.title || ''}')">✏️ Title</button>
+                    <button class="btn-sm btn-edit" onclick="loadDraftData('${draft._id}')">📂 Open</button>
+                    <button class="btn-sm btn-del" onclick="deleteDraftData('${draft._id}', '${draft.cloudinaryPublicId}')">🗑️ Delete</button>
+                </div>
+            `;
+            container.appendChild(item);
+        });
+    }
+
+    function filterDrafts() {
+        const searchInput = document.getElementById('draftSearch').value.toLowerCase();
+        const filtered = allDraftsCache.filter(draft => {
+            const titleMatch = (draft.title || '').toLowerCase().includes(searchInput);
+            const userMatch = (draft.user || '').toLowerCase().includes(searchInput);
+            return titleMatch || userMatch;
+        });
+        renderDraftsView(filtered);
+    }
+
+    async function editDraftTitle(id, oldTitle) {
+        const newTitle = prompt("Baguhin ang pamagat ng folder na ito:", oldTitle);
+        if (newTitle === null) return; 
+        if (newTitle.trim() === "") { alert("Hindi pwedeng blangko ang pamagat!"); return; }
+
+        try {
+            const response = await fetch('/api/drafts/update-title', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id: id, title: newTitle.trim() })
+            });
+            const res = await response.json();
+            if (res.success) {
+                alert("✅ Pamagat ng folder ay nabago!");
+                fetchDrafts();
+            } else {
+                alert("Maling tugon galing server: " + res.message);
+            }
+        } catch (error) {
+            alert("Hindi mabago ang pamagat sa ngayon.");
+        }
+    }
+
+    async function loadDraftData(id) {
+        try {
+            const response = await fetch(`/api/draft/get/${id}`);
+            const resData = await response.json();
+            
+            if(!resData.success) { alert(resData.message); return; }
+            
+            const draft = resData.data;
+            currentActiveDraftId = draft._id;
+            canvas.clear();
+            
+            currentBackgroundBase64 = draft.cloudinaryUrl;
+            
+            fabric.Image.fromURL(draft.cloudinaryUrl, (img) => {
+                const savedWidth = draft.canvasWidth || img.width;
+                const savedHeight = draft.canvasHeight || img.height;
+
+                canvas.setWidth(savedWidth);
+                canvas.setHeight(savedHeight);
+                
+                img.set({
+                    scaleX: savedWidth / (img.width || 1),
+                    scaleY: savedHeight / (img.height || 1)
+                });
+
+                canvas.setBackgroundImage(img, () => {
+                    draft.textLayers.forEach(layer => {
+                        const textObj = new fabric.IText(layer.text, {
+                            left: layer.left, top: layer.top, fontSize: layer.fontSize, fill: layer.fill, scaleX: layer.scaleX, scaleY: layer.scaleY
+                        });
+                        canvas.add(textObj);
+                    });
+                    canvas.renderAll();
+                    
+                    canvasHistory = [];
+                    historyIndex = -1;
+                    saveHistory();
+                    
+                    alert(`✏️ Draft "${draft.title || 'Untitled'}" loaded!`);
+                });
+            }, { crossOrigin: 'anonymous' }); 
+            
+        } catch(err) {
+            alert("Error sa pag-restore ng draft data.");
+        }
+    }
+
+    async function deleteDraftData(id, publicId) {
+    if(!confirm("Are you sure you want to delete this draft? It will be permanently removed from the list and Cloudinary storage.")) return;
+    
+    try {
+        const response = await fetch('/api/drafts/delete', {
+            method: 'DELETE',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id: id, publicId: publicId })
+        });
+        const result = await response.json();
+        if(result.success) {
+            alert("🗑️ File permanently deleted from Cloudinary and the database!");
+            if(currentActiveDraftId === id) {
+                clearWorkspace();
+            }
+                fetchDrafts();
+            } else {
+                alert("Failed to delete draft: " + result.message);
+            }
+        } catch(err) {
+            alert("Error sa pagbura ng napiling draft.");
+        }
+    }
+
+    async function saveToServer() { 
+        if (!canvas.backgroundImage && canvas.getObjects().length === 0) {
+            alert("Please upload or edit a document first!");
+            return;
+        }
+
+        showLoading("Ina-upload ang Final File sa server... 🚀");
+
+        try {
+            const base64Data = canvas.toDataURL({ format: 'jpeg', quality: 0.8 });
+            const response = await fetch('/api/upload-contract', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ file: base64Data, user: currentUser }) 
+            });
+
+            const result = await response.json();
+
+            if (result.success || response.ok) {
+                alert("✅ Pumasok na sa Cloudinary bilang Final File! URL: " + result.url);
+                clearWorkspace(); 
+            } else {
+                alert("❌ Ayaw mag-upload: " + result.message);
+            }
+            
+            if (typeof fetchHistory === 'function') fetchHistory(); 
+            
+        } catch (error) {
+            alert("Hindi ma-contact ang server.");
+        } finally {
+            hideLoading();
+        }
+    }
+
+    async function exportDoc() {
+        if (!originalPdfBytes) {
+            const dataURL = canvas.toDataURL({ format: 'png' });
+            const link = document.createElement('a'); link.href = dataURL; link.download = "HSEF_Output.png"; link.click();
+            return;
+        }
+        const { PDFDocument } = PDFLib; const pdfDoc = await PDFDocument.load(originalPdfBytes); const page = pdfDoc.getPages()[0];
+        const bg = canvas.backgroundImage; canvas.setBackgroundImage(null, canvas.renderAll.bind(canvas));
+        const img = await pdfDoc.embedPng(canvas.toDataURL('png')); canvas.setBackgroundImage(bg, canvas.renderAll.bind(canvas));
+        page.drawImage(img, { x: 0, y: 0, width: page.getWidth(), height: page.getHeight() });
+        const blob = new Blob([await pdfDoc.save()], { type: "application/pdf" });
+        const link = document.createElement('a'); link.href = URL.createObjectURL(blob); link.download = "HSEF_Form.pdf"; link.click();
+    }
+
+        async function fetchHistory() {
+    try {
+        const response = await fetch('/api/history');
+        const logs = await response.json();
+        const container = document.getElementById('historyList');
+        container.innerHTML = ''; 
+        
+        if (logs.length === 0) {
+            container.innerHTML = '<span style="color: #6c757d; display:block; text-align:center; padding:10px;">No history logs found.</span>';
+            return;
+        }
+
+        logs.forEach(log => {
+            const logItem = document.createElement('div');
+            // Flexbox styles to align the log text and the View button neatly
+            logItem.style.padding = '6px 0';
+            logItem.style.borderBottom = '1px solid var(--border)';
+            logItem.style.display = 'flex';
+            logItem.style.justifyContent = 'space-between'; 
+            logItem.style.alignItems = 'center';
+            
+            // ✅ USER FALLBACK: Safely looks for the correct user property name from your database
+            const rawUser = log.user || log.username || log.name || 'Unknown User';
+            const actionTaken = log.action || 'performed an activity';
+            
+            // Wrapper for the name and action text
+            const textSpan = document.createElement('span');
+            textSpan.innerHTML = `<strong>${getDisplayName(rawUser)}</strong>: <span style="font-size: 12px; color: #4a5568;">${actionTaken}</span>`;
+            logItem.appendChild(textSpan);
+
+           // ✅ VIEW BUTTON INJECTION
+            // Gagamitin natin ang log.url dahil ito ang nasa Mongoose schema mo
+            if (log.url) { 
+                const viewBtn = document.createElement('button');
+                viewBtn.className = 'btn-sm';
+                viewBtn.style.backgroundColor = '#3182ce'; 
+                viewBtn.style.color = 'white';
+                viewBtn.style.border = 'none';
+                viewBtn.style.padding = '2px 8px';
+                viewBtn.style.borderRadius = '4px';
+                viewBtn.style.cursor = 'pointer';
+                viewBtn.style.marginLeft = '10px';
+                viewBtn.innerText = 'View';
+                
+                // Bubuksan ang Cloudinary link sa bagong tab
+                viewBtn.onclick = () => window.open(log.url, '_blank'); 
+                
+                logItem.appendChild(viewBtn);
+            }
+
+            container.appendChild(logItem);
+        });
+    } catch (err) {
+        document.getElementById('historyList').innerHTML = '<span style="color: red;">Failed to load history.</span>';
+        console.error("History Fetch Error:", err); // Helps you debug in DevTools console if the API fails
+    }
+}
+
+    // Dummy placeholders para sa mga tinatawag na interface buttons (i-modify ayon sa setup mo)
+    function logoutApp() {
+        currentUser = null;
+        document.getElementById('mainWorkspace').style.display = 'none';
+        document.getElementById('loginScreen').style.display = 'block';
+    }
+
+    async function updateAccount() {
+        const currentUsername = document.getElementById('oldUser').value;
+        const currentPassword = document.getElementById('oldPass').value;
+        const newUsername = document.getElementById('newUser').value;
+        const newPassword = document.getElementById('newPass').value;
+
+        if (!currentUsername || !currentPassword) { alert("You must enter your current username and password!"); return; }
+        try {
+            const response = await fetch('/api/update-account', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ currentUsername, currentPassword, newUsername, newPassword })
+            });
+            const result = await response.json(); alert(result.message);
+            if (result.success) location.reload(); 
+        } catch (err) { alert("There was a problem connecting to the server."); }
+    }
+
+    function logoutApp() {
+        document.getElementById('loginScreen').style.display = 'block';
+        document.getElementById('mainWorkspace').style.display = 'none';
+        document.getElementById('usernameInput').value = '';
+        document.getElementById('passwordInput').value = '';
+        currentUser = null; currentActiveDraftId = null; canvas.clear();
+        alert("Naka-log out ka na nang ligtas!");
+    }
+
+    /* =========================================
+   UNDO / REDO SYSTEM LOGIC
+   ========================================= */
+
+// Function para mag-save ng state ng canvas
+function saveHistory() {
+    if (isHistoryNavigating) return; 
+
+    // Kung nag-undo ang user tapos gumawa ng bagong galaw, buburahin natin ang "future" history
+    if (historyIndex < canvasHistory.length - 1) {
+        canvasHistory = canvasHistory.slice(0, historyIndex + 1);
+    }
+
+    // Ise-save ang kasalukuyang itsura ng canvas
+    canvasHistory.push(JSON.stringify(canvas));
+    historyIndex++;
+}
+
+// Function para sa Undo
+function undo() {
+    if (historyIndex > 0) {
+        isHistoryNavigating = true;
+        historyIndex--;
+        canvas.loadFromJSON(canvasHistory[historyIndex], function() {
+            canvas.renderAll();
+            isHistoryNavigating = false;
+        });
+    }
+}
+
+// Function para sa Redo
+function redo() {
+    if (historyIndex < canvasHistory.length - 1) {
+        isHistoryNavigating = true;
+        historyIndex++;
+        canvas.loadFromJSON(canvasHistory[historyIndex], function() {
+            canvas.renderAll();
+            isHistoryNavigating = false;
+        });
+    }
+}
+
+// I-connect ang mga button sa functions
+document.getElementById('undoBtn').addEventListener('click', undo);
+document.getElementById('redoBtn').addEventListener('click', redo);
+
+// I-connect ang Keyboard Shortcuts (Ctrl+Z at Ctrl+Y)
+document.addEventListener('keydown', function(e) {
+    if (e.ctrlKey && e.key === 'z') {
+        e.preventDefault();
+        undo();
+    } else if (e.ctrlKey && e.key === 'y') {
+        e.preventDefault();
+        redo();
+    }
+});
+
+// Bantayan ang mga galaw sa Canvas para awtomatikong mag-save sa history
+canvas.on('object:added', saveHistory);
+canvas.on('object:modified', saveHistory);
+canvas.on('object:removed', saveHistory);
+
+</script>
+</body>
+</html>
